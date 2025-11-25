@@ -17,19 +17,11 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Improved version extraction with better regex
+                    // Simple and reliable version extraction
                     def version = sh(
-                        script: 'xmllint --xpath "/*[local-name()=\'project\']/*[local-name()=\'version\']/text()" pom.xml 2>/dev/null || grep -m1 "<version>" pom.xml | sed "s/<[^>]*>//g" | xargs',
+                        script: 'cat pom.xml | grep -m1 "<version>" | sed "s/.*<version>\\(.*\\)<\\/version>.*/\\1/"',
                         returnStdout: true
                     ).trim()
-                    
-                    // Fallback method if the above fails
-                    if (!version || version == 'null' || version.isEmpty()) {
-                        version = sh(
-                            script: 'cat pom.xml | grep -A1 "<artifactId>java-cicd-demo</artifactId>" | grep "<version>" | sed "s/<version>//g; s/<\\/version>//g" | xargs',
-                            returnStdout: true
-                        ).trim()
-                    }
                     
                     env.IMAGE_VERSION = version
                     echo "Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
@@ -71,8 +63,8 @@ pipeline {
                         sh 'git config user.email "jenkins@ci.com"'
                         sh 'git config user.name "Jenkins CI"'
                         
-                        // Set remote URL with credentials
-                        sh "git remote set-url origin https://\${GITHUB_TOKEN}@github.com/elorm116/java-cicd-demo.git"
+                        // Set remote URL with username and token for better authentication
+                        sh "git remote set-url origin https://elorm116:\${GITHUB_TOKEN}@github.com/elorm116/java-cicd-demo.git"
                         
                         // Commit and push changes
                         sh 'git add .'
