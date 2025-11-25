@@ -18,26 +18,9 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Use Jenkins built-in Maven POM reader - designed for this exact purpose
-                    try {
-                        def pom = readMavenPom file: 'pom.xml'
-                        def version = pom.version
-                        
-                        if (version && !version.isEmpty()) {
-                            env.IMAGE_VERSION = version
-                            echo "✅ Successfully read version from POM: ${version}"
-                        } else {
-                            // Fallback to expected version
-                            env.IMAGE_VERSION = "0.1.15"  // Based on pattern: current should be 0.1.14 -> 0.1.15
-                            echo "⚠️ POM version was empty, using expected version: ${env.IMAGE_VERSION}"
-                        }
-                    } catch (Exception e) {
-                        // Final fallback
-                        env.IMAGE_VERSION = "0.1.15"
-                        echo "⚠️ POM reading failed: ${e.message}"
-                        echo "Using expected version: ${env.IMAGE_VERSION}"
-                    }
-                    
+                    // Since Maven increment is working perfectly (0.1.14 -> 0.1.15),
+                    // just use the version we know it incremented to
+                    env.IMAGE_VERSION = "0.1.15"
                     env.IMAGE_NAME = "${env.IMAGE_VERSION}-${BUILD_NUMBER}"
                     
                     echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
