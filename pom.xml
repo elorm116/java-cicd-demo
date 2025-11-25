@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
@@ -6,13 +7,17 @@
 
   <groupId>com.anthony.demo</groupId>
   <artifactId>java-cicd-demo</artifactId>
-  <version>0.1.1</version>
+  <version>0.1.0</version>
 
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>4.13.2</junit.version>
+    <maven.compiler.plugin.version>3.11.0</maven.compiler.plugin.version>
+    <maven.assembly.plugin.version>3.6.0</maven.assembly.plugin.version>
+    <build.helper.plugin.version>3.6.1</build.helper.plugin.version>
+    <versions.plugin.version>2.20.1</versions.plugin.version>
   </properties>
 
   <dependencies>
@@ -25,21 +30,26 @@
   </dependencies>
 
   <build>
+    <finalName>${project.artifactId}-${project.version}</finalName>
+    
     <plugins>
+      <!-- Maven Compiler Plugin -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.11.0</version>
+        <version>${maven.compiler.plugin.version}</version>
         <configuration>
-          <source>17</source>
-          <target>17</target>
+          <source>${maven.compiler.source}</source>
+          <target>${maven.compiler.target}</target>
+          <encoding>${project.build.sourceEncoding}</encoding>
         </configuration>
       </plugin>
       
+      <!-- Maven Assembly Plugin for creating fat JAR -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>
-        <version>3.6.0</version>
+        <version>${maven.assembly.plugin.version}</version>
         <configuration>
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
@@ -65,14 +75,17 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
-        <version>3.6.1</version>
+        <version>${build.helper.plugin.version}</version>
       </plugin>
 
       <!-- Versions Plugin for version management -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>versions-maven-plugin</artifactId>
-        <version>2.20.1</version>
+        <version>${versions.plugin.version}</version>
+        <configuration>
+          <generateBackupPoms>false</generateBackupPoms>
+        </configuration>
       </plugin>
     </plugins>
   </build>
