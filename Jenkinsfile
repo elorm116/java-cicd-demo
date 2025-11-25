@@ -7,6 +7,7 @@ pipeline {
     }
     environment {
         IMAGE_VERSION = ''
+        IMAGE_NAME = ''
     }
     stages {
         stage('Increment Version') {
@@ -17,27 +18,44 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Ultra-simple version extraction - just get the first version tag
-                    def version = sh(
-                        script: 'grep -m1 "<version>" pom.xml | sed "s/.*<version>\\([^<]*\\)<\\/version>.*/\\1/" | tr -d " \\t"',
-                        returnStdout: true
-                    ).trim()
+                    // Try the simple regex method first (from example)
+                    def version = ""
+                    try {
+                        def matcher = readFile('pom.xml') =~ /<version>([^<]+)<\/version>/
+                        if (matcher) {
+                            // Get the first version after our groupId (should be project version)
+                            def pomContent = readFile('pom.xml')
+                            def projectSection = pomContent =~ /(?s)<groupId>com\.anthony\.demo<\/groupId>.*?<version>([^<]+)<\/version>/
+                            if (projectSection) {
+                                version = projectSection[0][1].trim()
+                            } else {
+                                version = matcher[0][1].trim()
+                            }
+                        }
+                    } catch (Exception e) {
+                        echo "Regex extraction failed: ${e.message}"
+                    }
                     
-                    // If that fails, we know from Maven output it should be 0.1.12
-                    if (!version || version == 'null' || version.isEmpty()) {
-                        version = "0.1.12"  // From Maven logs: 0.1.11 -> 0.1.12
-                        echo "⚠️ Version extraction failed, using Maven output version: ${version}"
+                    // Fallback to your shell method if regex fails
+                    if (!version || version.isEmpty()) {
+                        echo "Trying shell extraction..."
+                        version = sh(
+                            script: 'grep -m1 "<version>" pom.xml | sed "s/.*<version>\\([^<]*\\)<\\/version>.*/\\1/" | tr -d " \\t"',
+                            returnStdout: true
+                        ).trim()
+                    }
+                    
+                    // Final fallback
+                    if (!version || version.isEmpty()) {
+                        version = "0.1.13"  // Update based on current version
+                        echo "⚠️ All extraction methods failed, using fallback: ${version}"
                     }
                     
                     env.IMAGE_VERSION = version
-                    echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
+                    env.IMAGE_NAME = "${version}-${BUILD_NUMBER}"  // Add build number like the example
                     
-                    // Validate version format (but don't fail the pipeline)
-                    if (env.IMAGE_VERSION ==~ /\d+\.\d+\.\d+/) {
-                        echo "✅ Version format validated: ${env.IMAGE_VERSION}"
-                    } else {
-                        echo "⚠️ Warning: Unexpected version format: ${env.IMAGE_VERSION}"
-                    }
+                    echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
+                    echo "✅ Set IMAGE_NAME to: ${env.IMAGE_NAME}"
                 }
             }
         }
@@ -54,9 +72,9 @@ pipeline {
                 script {
                     echo "Building Docker image..."
                     withCredentials([usernamePassword(credentialsId: 'docker-nexus-repo', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "docker build -t host.docker.internal:8083/my-app:${env.IMAGE_VERSION} ."
+                        sh "docker build -t host.docker.internal:8083/my-app:${env.IMAGE_NAME} ."
                         sh "echo \$PASS | docker login host.docker.internal:8083 -u \$USER --password-stdin"
-                        sh "docker push host.docker.internal:8083/my-app:${env.IMAGE_VERSION}"
+                        sh "docker push host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
                     }
                 }
             }
@@ -92,7 +110,7 @@ pipeline {
     post {
         success {
             echo "✅ Pipeline completed successfully!"
-            echo "🚀 Built and pushed: my-app:${env.IMAGE_VERSION}"
+            echo "🚀 Built and pushed: my-app:${env.IMAGE_NAME}"
             echo "📝 Version committed to repository"
         }
         failure {
