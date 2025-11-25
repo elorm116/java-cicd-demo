@@ -19,7 +19,7 @@ pipeline {
                     def matcher = readFile('pom.xml') =~ '<version>(.+)</version>'
                     def version = matcher[0][1]
                     env.IMAGE_VERSION = version
-                    env.IMAGE_NAME = "$version-$BUILD_NUMBER"
+                    echo "Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
                 }
             }
         }
