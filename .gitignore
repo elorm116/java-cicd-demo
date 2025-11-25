@@ -1,0 +1,18 @@
+target/
+*.log
+*.iml
+.idea/
+.DS_Store
+
+# Additional Maven files that can be generated
+dependency-reduced-pom.xml
+pom.xml.versionsBackup
+release.properties
+
+# VS Code
+.vscode/
+
+# Temporary files
+*.tmp
+*.swp
+*~
