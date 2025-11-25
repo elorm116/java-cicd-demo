@@ -17,15 +17,10 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Write version to file and read it back - foolproof method
+                    // Simplified version extraction - target the exact line
                     sh '''
-                        # Extract version and write to temp file
-                        grep -A 5 "<groupId>com.anthony.demo</groupId>" pom.xml | \
-                        grep "<version>" | \
-                        head -1 | \
-                        cut -d'>' -f2 | \
-                        cut -d'<' -f1 | \
-                        tr -d ' \\t\\n' > version.tmp
+                        # Find the project version line and extract it
+                        awk '/<groupId>com.anthony.demo<\\/groupId>/{getline; getline; if(/<version>/){gsub(/<[^>]*>/,""); gsub(/^[ \\t]+|[ \\t]+$/,""); print}}' pom.xml > version.tmp
                     '''
                     
                     def version = readFile('version.tmp').trim()
@@ -49,7 +44,9 @@ pipeline {
                 script {
                     echo "building the docker image..."
                     withCredentials([usernamePassword(credentialsId: 'docker-nexus-repo', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "docker build -t host.docker.internal:8083/my-app:${env.IMAGE_VERSION} ."
+                        // Clean up Docker to fix snapshot issues
+                        sh 'docker system prune -f'
+                        sh "docker build --no-cache -t host.docker.internal:8083/my-app:${env.IMAGE_VERSION} ."
                         sh "echo \$PASS | docker login host.docker.internal:8083 -u \$USER --password-stdin"
                         sh "docker push host.docker.internal:8083/my-app:${env.IMAGE_VERSION}"
                     }
