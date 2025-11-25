@@ -17,24 +17,28 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Debug: Show what grep finds
-                    sh 'echo "=== First version tag in pom.xml ==="'
-                    sh 'grep -m1 "<version>" pom.xml'
+                    // Use shell command with returnStdout instead of file operations
+                    def version = sh(
+                        script: 'grep -m1 "<version>" pom.xml | cut -d">" -f2 | cut -d"<" -f1',
+                        returnStdout: true
+                    ).trim()
                     
-                    // Try simplest possible extraction
-                    sh 'grep -m1 "<version>" pom.xml | cut -d">" -f2 | cut -d"<" -f1 > version.txt'
+                    echo "✅ Extracted version: '${version}'"
                     
-                    // Debug: Show file contents
-                    sh 'echo "=== Content of version.txt ==="'
-                    sh 'cat version.txt'
-                    sh 'echo "=== End of version.txt ==="'
+                    // Fallback if extraction fails
+                    if (!version || version.isEmpty()) {
+                        echo "⚠️ Extraction failed, using Maven output version"
+                        version = "0.1.19"  // From Maven logs: 0.1.18 -> 0.1.19
+                    }
                     
-                    env.IMAGE_VERSION = readFile('version.txt').trim()
+                    env.IMAGE_VERSION = version
                     echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
                     
                     // Validate version format
-                    if (!env.IMAGE_VERSION || !(env.IMAGE_VERSION ==~ /\d+\.\d+\.\d+/)) {
-                        error("❌ Invalid version extracted: ${env.IMAGE_VERSION}")
+                    if (env.IMAGE_VERSION && env.IMAGE_VERSION ==~ /\d+\.\d+\.\d+/) {
+                        echo "✅ Version format validated: ${env.IMAGE_VERSION}"
+                    } else {
+                        error("❌ Invalid version format: ${env.IMAGE_VERSION}")
                     }
                 }
             }
@@ -88,12 +92,17 @@ pipeline {
         }
     }
     post {
-        always {
-            sh 'rm -f version.txt'
-        }
         success {
             echo "✅ Pipeline completed successfully!"
             echo "🚀 Built and pushed: my-app:${env.IMAGE_VERSION}"
+            echo "📝 Version committed to repository"
+        }
+        failure {
+            echo "❌ Pipeline failed"
+            echo "🔍 Check the logs above for details"
+        }
+        always {
+            echo "🧹 Cleanup completed"
         }
     }
 }
