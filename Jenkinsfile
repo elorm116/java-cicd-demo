@@ -7,7 +7,6 @@ pipeline {
     }
     environment {
         IMAGE_VERSION = ''
-        IMAGE_NAME = ''
     }
     stages {
         stage('Increment Version') {
@@ -18,45 +17,21 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Extract version from line 10 (correct line where <version>0.1.17</version> is located)
-                    def version = sh(
-                        script: '''
-                            # Extract version from line 10 specifically
-                            sed -n '10p' pom.xml | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
-                        ''',
-                        returnStdout: true
-                    ).trim()
+                    // Write version to a file, then read it
+                    sh '''
+                        grep -m1 '<version>' pom.xml | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t' > version.txt
+                    '''
                     
-                    echo "Extracted version from line 10: '${version}'"
+                    env.IMAGE_VERSION = readFile('version.txt').trim()
+                    echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
                     
-                    // Fallback: if sed fails, try different approach
-                    if (!version || version.isEmpty() || version.contains('<') || version == 'null') {
-                        echo "Line 10 extraction failed, trying pattern match..."
-                        version = sh(
-                            script: '''
-                                # Look for version between artifactId and properties
-                                sed -n '/<artifactId>java-cicd-demo<\\/artifactId>/,/<properties>/p' pom.xml | grep '<version>' | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
-                            ''',
-                            returnStdout: true
-                        ).trim()
-                        echo "Extracted version from pattern: '${version}'"
+                    // Validate version format
+                    if (!env.IMAGE_VERSION || !(env.IMAGE_VERSION ==~ /\d+\.\d+\.\d+/)) {
+                        error("❌ Invalid version extracted: ${env.IMAGE_VERSION}")
                     }
-                    
-                    // Final fallback: we know Maven incremented to 0.1.17
-                    if (!version || version.isEmpty() || version.contains('<') || version == 'null') {
-                        echo "All extraction failed. Maven output shows 0.1.16 -> 0.1.17"
-                        version = "0.1.17"
-                    }
-                    
-                    env.IMAGE_VERSION = version
-                    env.IMAGE_NAME = "${version}-${BUILD_NUMBER}"
-                    
-                    echo "✅ Final IMAGE_VERSION: ${env.IMAGE_VERSION}"
-                    echo "✅ Final IMAGE_NAME: ${env.IMAGE_NAME}"
                 }
             }
         }
-        
         stage('Build App') {
             steps {
                 script {
@@ -65,29 +40,26 @@ pipeline {
                 }
             }
         }
-        
         stage('Build Docker Image') {
             steps {
                 script {
                     echo "Building Docker image..."
                     withCredentials([usernamePassword(credentialsId: 'docker-nexus-repo', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "docker build -t host.docker.internal:8083/my-app:${env.IMAGE_NAME} ."
+                        sh "docker build -t host.docker.internal:8083/my-app:${env.IMAGE_VERSION} ."
                         sh "echo \$PASS | docker login host.docker.internal:8083 -u \$USER --password-stdin"
-                        sh "docker push host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
+                        sh "docker push host.docker.internal:8083/my-app:${env.IMAGE_VERSION}"
                     }
                 }
             }
         }
-        
         stage('Deploy') {
             steps {
                 script {
                     echo 'Deploying Docker image to EC2...'
-                    echo "Would deploy: host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
+                    echo "Would deploy: host.docker.internal:8083/my-app:${env.IMAGE_VERSION}"
                 }
             }
         }
-        
         stage('Commit Version Update') {
             steps {
                 script {
@@ -109,20 +81,15 @@ pipeline {
             }
         }
     }
-    
     post {
+        always {
+            sh 'rm -f version.txt'
+        }
         success {
             echo "✅ Pipeline completed successfully!"
-            echo "🚀 Built and pushed: my-app:${env.IMAGE_NAME}"
+            echo "🚀 Built and pushed: my-app:${env.IMAGE_VERSION}"
             echo "📝 Version committed to repository"
-            echo "🎯 Docker image: host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
-        }
-        failure {
-            echo "❌ Pipeline failed"
-            echo "🔍 Check the logs above for details"
-        }
-        always {
-            echo "🧹 Cleanup completed"
+            echo "🎯 Docker image available at: host.docker.internal:8083/my-app:${env.IMAGE_VERSION}"
         }
     }
 }
