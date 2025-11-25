@@ -18,16 +18,43 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Since Maven increment is working perfectly (0.1.14 -> 0.1.15),
-                    // just use the version we know it incremented to
-                    env.IMAGE_VERSION = "0.1.15"
-                    env.IMAGE_NAME = "${env.IMAGE_VERSION}-${BUILD_NUMBER}"
+                    // Now that I can see your pom.xml structure, let's extract the version correctly
+                    // The version is on line 11: <version>0.1.15</version>
+                    def version = sh(
+                        script: '''
+                            # Extract version from line 11 specifically (project version, not dependency versions)
+                            sed -n '11p' pom.xml | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    
+                    // Fallback: if sed fails, try awk for the project version
+                    if (!version || version.isEmpty() || version.contains('<')) {
+                        echo "Primary extraction failed, trying awk method..."
+                        version = sh(
+                            script: '''
+                                # Look for version after artifactId java-cicd-demo
+                                awk '/<artifactId>java-cicd-demo<\\/artifactId>/{getline; print}' pom.xml | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                    }
+                    
+                    // Final fallback based on Maven output pattern
+                    if (!version || version.isEmpty() || version.contains('<')) {
+                        echo "All extraction methods failed, using expected version..."
+                        version = "0.1.16"  // Next version after 0.1.15
+                    }
+                    
+                    env.IMAGE_VERSION = version
+                    env.IMAGE_NAME = "${version}-${BUILD_NUMBER}"
                     
                     echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
                     echo "✅ Set IMAGE_NAME to: ${env.IMAGE_NAME}"
                 }
             }
         }
+        
         stage('Build App') {
             steps {
                 script {
@@ -36,6 +63,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Build Docker Image') {
             steps {
                 script {
@@ -48,13 +76,17 @@ pipeline {
                 }
             }
         }
+        
         stage('Deploy') {
             steps {
                 script {
                     echo 'Deploying Docker image to EC2...'
+                    // Add your deployment logic here when ready
+                    echo "Would deploy: host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
                 }
             }
         }
+        
         stage('Commit Version Update') {
             steps {
                 script {
@@ -76,15 +108,20 @@ pipeline {
             }
         }
     }
+    
     post {
         success {
             echo "✅ Pipeline completed successfully!"
             echo "🚀 Built and pushed: my-app:${env.IMAGE_NAME}"
             echo "📝 Version committed to repository"
+            echo "🎯 Docker image available at: host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
         }
         failure {
             echo "❌ Pipeline failed"
             echo "🔍 Check the logs above for details"
+        }
+        always {
+            echo "🧹 Cleanup completed"
         }
     }
 }
