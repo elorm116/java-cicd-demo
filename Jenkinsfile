@@ -17,9 +17,9 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Simple and reliable version extraction
+                    // Use Maven to extract the actual project version
                     def version = sh(
-                        script: 'cat pom.xml | grep -m1 "<version>" | sed "s/.*<version>\\(.*\\)<\\/version>.*/\\1/"',
+                        script: 'mvn help:evaluate -Dexpression=project.version -q -DforceStdout',
                         returnStdout: true
                     ).trim()
                     
