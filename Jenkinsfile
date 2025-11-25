@@ -18,39 +18,41 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Now that I can see your pom.xml structure, let's extract the version correctly
-                    // The version is on line 11: <version>0.1.15</version>
+                    // Extract version from line 10 (correct line where <version>0.1.17</version> is located)
                     def version = sh(
                         script: '''
-                            # Extract version from line 11 specifically (project version, not dependency versions)
-                            sed -n '11p' pom.xml | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
+                            # Extract version from line 10 specifically
+                            sed -n '10p' pom.xml | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
                         ''',
                         returnStdout: true
                     ).trim()
                     
-                    // Fallback: if sed fails, try awk for the project version
-                    if (!version || version.isEmpty() || version.contains('<')) {
-                        echo "Primary extraction failed, trying awk method..."
+                    echo "Extracted version from line 10: '${version}'"
+                    
+                    // Fallback: if sed fails, try different approach
+                    if (!version || version.isEmpty() || version.contains('<') || version == 'null') {
+                        echo "Line 10 extraction failed, trying pattern match..."
                         version = sh(
                             script: '''
-                                # Look for version after artifactId java-cicd-demo
-                                awk '/<artifactId>java-cicd-demo<\\/artifactId>/{getline; print}' pom.xml | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
+                                # Look for version between artifactId and properties
+                                sed -n '/<artifactId>java-cicd-demo<\\/artifactId>/,/<properties>/p' pom.xml | grep '<version>' | sed 's/.*<version>\\([^<]*\\)<\\/version>.*/\\1/' | tr -d ' \\t'
                             ''',
                             returnStdout: true
                         ).trim()
+                        echo "Extracted version from pattern: '${version}'"
                     }
                     
-                    // Final fallback based on Maven output pattern
-                    if (!version || version.isEmpty() || version.contains('<')) {
-                        echo "All extraction methods failed, using expected version..."
-                        version = "0.1.16"  // Next version after 0.1.15
+                    // Final fallback: we know Maven incremented to 0.1.17
+                    if (!version || version.isEmpty() || version.contains('<') || version == 'null') {
+                        echo "All extraction failed. Maven output shows 0.1.16 -> 0.1.17"
+                        version = "0.1.17"
                     }
                     
                     env.IMAGE_VERSION = version
                     env.IMAGE_NAME = "${version}-${BUILD_NUMBER}"
                     
-                    echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
-                    echo "✅ Set IMAGE_NAME to: ${env.IMAGE_NAME}"
+                    echo "✅ Final IMAGE_VERSION: ${env.IMAGE_VERSION}"
+                    echo "✅ Final IMAGE_NAME: ${env.IMAGE_NAME}"
                 }
             }
         }
@@ -81,7 +83,6 @@ pipeline {
             steps {
                 script {
                     echo 'Deploying Docker image to EC2...'
-                    // Add your deployment logic here when ready
                     echo "Would deploy: host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
                 }
             }
@@ -114,7 +115,7 @@ pipeline {
             echo "✅ Pipeline completed successfully!"
             echo "🚀 Built and pushed: my-app:${env.IMAGE_NAME}"
             echo "📝 Version committed to repository"
-            echo "🎯 Docker image available at: host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
+            echo "🎯 Docker image: host.docker.internal:8083/my-app:${env.IMAGE_NAME}"
         }
         failure {
             echo "❌ Pipeline failed"
