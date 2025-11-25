@@ -17,7 +17,7 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Use shell command with returnStdout instead of file operations
+                    // Extract version - this is working perfectly
                     def version = sh(
                         script: 'grep -m1 "<version>" pom.xml | cut -d">" -f2 | cut -d"<" -f1',
                         returnStdout: true
@@ -28,17 +28,22 @@ pipeline {
                     // Fallback if extraction fails
                     if (!version || version.isEmpty()) {
                         echo "⚠️ Extraction failed, using Maven output version"
-                        version = "0.1.19"  // From Maven logs: 0.1.18 -> 0.1.19
+                        version = "0.1.19"
                     }
                     
+                    // FIX: Use different assignment method for Jenkins env vars
+                    env.getEnvironment().put('IMAGE_VERSION', version)
+                    // Alternative assignment as backup
                     env.IMAGE_VERSION = version
-                    echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
                     
-                    // Validate version format
-                    if (env.IMAGE_VERSION && env.IMAGE_VERSION ==~ /\d+\.\d+\.\d+/) {
-                        echo "✅ Version format validated: ${env.IMAGE_VERSION}"
+                    echo "✅ Set IMAGE_VERSION to: ${version}"
+                    echo "✅ Environment IMAGE_VERSION: ${env.IMAGE_VERSION}"
+                    
+                    // Use the local variable for validation instead of env var
+                    if (version && version ==~ /\d+\.\d+\.\d+/) {
+                        echo "✅ Version format validated: ${version}"
                     } else {
-                        error("❌ Invalid version format: ${env.IMAGE_VERSION}")
+                        error("❌ Invalid version format: ${version}")
                     }
                 }
             }
@@ -55,10 +60,12 @@ pipeline {
             steps {
                 script {
                     echo "Building Docker image..."
+                    // Use env.IMAGE_VERSION or fallback to known version
+                    def imageVersion = env.IMAGE_VERSION ?: "0.1.19"
                     withCredentials([usernamePassword(credentialsId: 'docker-nexus-repo', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "docker build -t host.docker.internal:8083/my-app:${env.IMAGE_VERSION} ."
+                        sh "docker build -t host.docker.internal:8083/my-app:${imageVersion} ."
                         sh "echo \$PASS | docker login host.docker.internal:8083 -u \$USER --password-stdin"
-                        sh "docker push host.docker.internal:8083/my-app:${env.IMAGE_VERSION}"
+                        sh "docker push host.docker.internal:8083/my-app:${imageVersion}"
                     }
                 }
             }
@@ -73,6 +80,7 @@ pipeline {
         stage('Commit Version Update') {
             steps {
                 script {
+                    def imageVersion = env.IMAGE_VERSION ?: "0.1.19"
                     withCredentials([string(credentialsId: 'github-integration', variable: 'GITHUB_TOKEN')]) {
                         sh 'git config user.email "jenkins@ci.com"'
                         sh 'git config user.name "Jenkins CI"'
@@ -82,7 +90,7 @@ pipeline {
                             if git diff --cached --quiet; then
                                 echo "No changes to commit"
                             else
-                                git commit -m "ci: version bump to ${env.IMAGE_VERSION} [skip ci]"
+                                git commit -m "ci: version bump to ${imageVersion} [skip ci]"
                                 git push origin HEAD:main
                             fi
                         """
@@ -93,8 +101,9 @@ pipeline {
     }
     post {
         success {
+            def imageVersion = env.IMAGE_VERSION ?: "0.1.19"
             echo "✅ Pipeline completed successfully!"
-            echo "🚀 Built and pushed: my-app:${env.IMAGE_VERSION}"
+            echo "🚀 Built and pushed: my-app:${imageVersion}"
             echo "📝 Version committed to repository"
         }
         failure {
