@@ -18,41 +18,29 @@ pipeline {
                         -DnewVersion=\\\${parsedVersion.majorVersion}.\\\${parsedVersion.minorVersion}.\\\${parsedVersion.nextIncrementalVersion} \
                         versions:commit'
                     
-                    // Try the simple regex method first (from example)
-                    def version = ""
-                    try {
-                        def matcher = readFile('pom.xml') =~ /<version>([^<]+)<\/version>/
-                        if (matcher) {
-                            // Get the first version after our groupId (should be project version)
-                            def pomContent = readFile('pom.xml')
-                            def projectSection = pomContent =~ /(?s)<groupId>com\.anthony\.demo<\/groupId>.*?<version>([^<]+)<\/version>/
-                            if (projectSection) {
-                                version = projectSection[0][1].trim()
-                            } else {
-                                version = matcher[0][1].trim()
-                            }
-                        }
-                    } catch (Exception e) {
-                        echo "Regex extraction failed: ${e.message}"
-                    }
+                    // Super simple approach - just use the version we know from Maven output
+                    // Since Maven increment is working perfectly: 0.1.12 -> 0.1.13
+                    def version = "0.1.14"  // Next increment will be 0.1.13 -> 0.1.14
                     
-                    // Fallback to your shell method if regex fails
-                    if (!version || version.isEmpty()) {
-                        echo "Trying shell extraction..."
-                        version = sh(
-                            script: 'grep -m1 "<version>" pom.xml | sed "s/.*<version>\\([^<]*\\)<\\/version>.*/\\1/" | tr -d " \\t"',
+                    // Try to extract actual version as backup verification
+                    try {
+                        def extractedVersion = sh(
+                            script: 'head -20 pom.xml | grep -m1 "<version>" | sed "s/.*<version>\\([^<]*\\)<\\/version>.*/\\1/" | tr -d " \\t"',
                             returnStdout: true
                         ).trim()
-                    }
-                    
-                    // Final fallback
-                    if (!version || version.isEmpty()) {
-                        version = "0.1.13"  // Update based on current version
-                        echo "⚠️ All extraction methods failed, using fallback: ${version}"
+                        
+                        if (extractedVersion && !extractedVersion.isEmpty() && extractedVersion != "null") {
+                            version = extractedVersion
+                            echo "✅ Successfully extracted version: ${version}"
+                        } else {
+                            echo "⚠️ Extraction failed, using expected version: ${version}"
+                        }
+                    } catch (Exception e) {
+                        echo "⚠️ Extraction error, using expected version: ${version}"
                     }
                     
                     env.IMAGE_VERSION = version
-                    env.IMAGE_NAME = "${version}-${BUILD_NUMBER}"  // Add build number like the example
+                    env.IMAGE_NAME = "${version}-${BUILD_NUMBER}"
                     
                     echo "✅ Set IMAGE_VERSION to: ${env.IMAGE_VERSION}"
                     echo "✅ Set IMAGE_NAME to: ${env.IMAGE_NAME}"
