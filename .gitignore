@@ -47,3 +47,4 @@ testem.log
 # System Files
 .DS_Store
 Thumbs.db
+api/node_modules/public-encrypt/test/test_rsa_privkey.pem
