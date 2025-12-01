@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration - Updated with your Nexus setup
-NEXUS_URL="host.docker.internal:8083"
+NEXUS_URL="89690eacab5e.ngrok-free.app"
 IMAGE_NAME="my-app"
 IMAGE_TAG="${1:-latest}"         # Use first argument as tag, default to 'latest'
 
