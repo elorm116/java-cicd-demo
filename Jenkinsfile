@@ -20,10 +20,12 @@ pipeline {
                     sshagent(['ec2-server-key']) {
                         withCredentials([usernamePassword(credentialsId: 'docker-nexus-repo', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                             sh """
-                                ssh -o StrictHostKeyChecking=no ec2-user@34.239.177.1 << 'EOF'
-                                    echo "\$PASS" | docker login 89690eacab5e.ngrok-free.app -u "\$USER" --password-stdin
-                                    docker pull 89690eacab5e.ngrok-free.app/my-app:v1
-                                    docker run -d --name my-app -p 3000:80 89690eacab5e.ngrok-free.app/my-app:v1
+                                ssh -o StrictHostKeyChecking=no -T ec2-user@34.239.177.1 << 'EOF'
+echo "\$PASS" | docker login 89690eacab5e.ngrok-free.app -u "\$USER" --password-stdin
+docker pull 89690eacab5e.ngrok-free.app/my-app:0.1.21-amd64
+docker stop my-app || true
+docker rm my-app || true
+docker run -d --name my-app -p 3000:80 89690eacab5e.ngrok-free.app/my-app:0.1.21-amd64
 EOF
                             """
                         }
