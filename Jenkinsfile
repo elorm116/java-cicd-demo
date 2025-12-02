@@ -23,7 +23,7 @@ pipeline {
                     sshagent(['ec2-server-key']) {
                         withCredentials([string(credentialsId: 'github-integration', variable: 'GITHUB_TOKEN')]) {
                             sh """
-                                scp -o StrictHostKeyChecking=no docker-compose.yml ec2-user@3.215.186.80:/home/ec2-user/
+                                scp -o StrictHostKeyChecking=no docker-compose.yaml ec2-user@3.215.186.80:/home/ec2-user/
                                 ssh -o StrictHostKeyChecking=no ec2-user@3.215.186.80 << 'ENDSSH'
                                     cd /home/ec2-user/
                                     
