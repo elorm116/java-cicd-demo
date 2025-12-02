@@ -1,10 +1,10 @@
 version: '3.8'
 services:
   my-app:
-    image: nhcr.io/elorm116/my-app:v2
+    image: ghcr.io/elorm116/my-app:v2
     ports:
-      - "3000:80"
-  postgresql:  # Fixed the typo
+      - "3000:80"  # Changed to match port 3000 from Jenkinsfile
+  postgresql:
     image: postgres:13
     environment:
       POSTGRES_USER: user
