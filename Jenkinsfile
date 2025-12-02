@@ -1,3 +1,5 @@
+#!/usr/bin/env groovy
+
 pipeline {
     agent any
     
@@ -13,20 +15,22 @@ pipeline {
             steps {
                 script {
                     echo "Building Docker image with tag: ${IMAGE_TAG}"
-                    sh """
-                        # Create and use a multi-platform builder
-                        docker buildx create --use --name multiarch --driver docker-container || true
-                        
-                        # Login to registry first for buildx push
-                        echo "\$GITHUB_TOKEN" | docker login ${REGISTRY} -u ${GITHUB_USER} --password-stdin
-                        
-                        # Build for both AMD64 and ARM64 architectures and push directly
-                        docker buildx build --platform linux/amd64,linux/arm64 -t ${IMAGE_NAME}:${IMAGE_TAG} --push .
-                        docker buildx build --platform linux/amd64,linux/arm64 -t ${IMAGE_NAME}:latest --push .
-                        
-                        # Logout from registry
-                        docker logout ${REGISTRY}
-                    """
+                    withCredentials([string(credentialsId: 'github-integration', variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            # Create and use a multi-platform builder
+                            docker buildx create --use --name multiarch --driver docker-container || true
+                            
+                            # Login to registry first for buildx push
+                            echo "\$GITHUB_TOKEN" | docker login ${REGISTRY} -u ${GITHUB_USER} --password-stdin
+                            
+                            # Build for both AMD64 and ARM64 architectures and push directly
+                            docker buildx build --platform linux/amd64,linux/arm64 -t ${IMAGE_NAME}:${IMAGE_TAG} --push .
+                            docker buildx build --platform linux/amd64,linux/arm64 -t ${IMAGE_NAME}:latest --push .
+                            
+                            # Logout from registry
+                            docker logout ${REGISTRY}
+                        """
+                    }
                 }
             }
         }
@@ -95,9 +99,6 @@ pipeline {
                 sh """
                     # Clean up buildx builder
                     docker buildx rm multiarch || true
-                    
-                    # Note: Images aren't stored locally when using buildx --push
-                    # so no need to remove local images
                 """
             }
         }
@@ -108,3 +109,4 @@ pipeline {
             echo "Pipeline failed!"
         }
     }
+}
