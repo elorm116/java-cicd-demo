@@ -14,8 +14,18 @@ pipeline {
                 script {
                     echo "Building Docker image with tag: ${IMAGE_TAG}"
                     sh """
-                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                        docker build -t ${IMAGE_NAME}:latest .
+                        # Create and use a multi-platform builder
+                        docker buildx create --use --name multiarch --driver docker-container || true
+                        
+                        # Login to registry first for buildx push
+                        echo "\$GITHUB_TOKEN" | docker login ${REGISTRY} -u ${GITHUB_USER} --password-stdin
+                        
+                        # Build for both AMD64 and ARM64 architectures and push directly
+                        docker buildx build --platform linux/amd64,linux/arm64 -t ${IMAGE_NAME}:${IMAGE_TAG} --push .
+                        docker buildx build --platform linux/amd64,linux/arm64 -t ${IMAGE_NAME}:latest --push .
+                        
+                        # Logout from registry
+                        docker logout ${REGISTRY}
                     """
                 }
             }
@@ -24,15 +34,8 @@ pipeline {
         stage('Push') {
             steps {
                 script {
-                    echo "Pushing image to GitHub Container Registry..."
-                    withCredentials([string(credentialsId: 'github-integration', variable: 'GITHUB_TOKEN')]) {
-                        sh """
-                            echo "\$GITHUB_TOKEN" | docker login ${REGISTRY} -u ${GITHUB_USER} --password-stdin
-                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                            docker push ${IMAGE_NAME}:latest
-                            docker logout ${REGISTRY}
-                        """
-                    }
+                    echo "Images already pushed during build stage with buildx"
+                    // Images are already pushed in build stage when using buildx
                 }
             }
         }
@@ -90,8 +93,11 @@ pipeline {
         always {
             script {
                 sh """
-                    docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true
-                    docker rmi ${IMAGE_NAME}:latest || true
+                    # Clean up buildx builder
+                    docker buildx rm multiarch || true
+                    
+                    # Note: Images aren't stored locally when using buildx --push
+                    # so no need to remove local images
                 """
             }
         }
@@ -102,4 +108,3 @@ pipeline {
             echo "Pipeline failed!"
         }
     }
-}
