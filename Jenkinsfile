@@ -2,46 +2,108 @@
 
 pipeline {
     agent any
+    
+    environment {
+        IMAGE_TAG = "${BUILD_NUMBER}"  // Use Jenkins build number as tag
+        IMAGE_NAME = "ghcr.io/elorm116/my-app"
+        REGISTRY = "ghcr.io"
+        GITHUB_USER = "elorm116"
+    }
 
     stages {
         stage('Build') {
             steps {
-                echo "Building project..."
+                script {
+                    echo "Building Docker image with tag: ${IMAGE_TAG}"
+                    sh """
+                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                        docker build -t ${IMAGE_NAME}:latest .
+                    """
+                }
+            }
+        }
+
+        stage('Push') {
+            steps {
+                script {
+                    echo "Pushing image to GitHub Container Registry..."
+                    withCredentials([string(credentialsId: 'github-integration', variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            echo "\$GITHUB_TOKEN" | docker login ${REGISTRY} -u ${GITHUB_USER} --password-stdin
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                            docker push ${IMAGE_NAME}:latest
+                            docker logout ${REGISTRY}
+                        """
+                    }
+                }
             }
         }
 
         stage('Test') {
             steps {
                 echo "Running tests..."
+                // Add your test commands here
             }
         }
 
         stage('Deploy') {
             steps {
                 script {
-                    echo "Deploying application to EC2 instance..."
+                    echo "Deploying application with image tag: ${IMAGE_TAG}"
                     sshagent(['ec2-server-key']) {
                         withCredentials([string(credentialsId: 'github-integration', variable: 'GITHUB_TOKEN')]) {
                             sh """
-                                scp -o StrictHostKeyChecking=no docker-compose.yaml ec2-user@3.215.186.80:/home/ec2-user/
+                                # Update docker-compose.yml with new image tag
+                                sed 's|ghcr.io/elorm116/my-app:.*|ghcr.io/elorm116/my-app:${IMAGE_TAG}|g' docker-compose.yaml > docker-compose-deploy.yaml
+                                
+                                # Copy updated compose file to EC2
+                                scp -o StrictHostKeyChecking=no docker-compose-deploy.yaml ec2-user@3.215.186.80:/home/ec2-user/docker-compose.yaml
+
+                                # Deploy on EC2
                                 ssh -o StrictHostKeyChecking=no ec2-user@3.215.186.80 << 'ENDSSH'
                                     cd /home/ec2-user/
                                     
-                                    # Login to GitHub Container Registry (if needed for private images)
-                                    echo "\$GITHUB_TOKEN" | docker login ghcr.io -u elorm116 --password-stdin
+                                    # Login to GitHub Container Registry
+                                    echo "\$GITHUB_TOKEN" | docker login ${REGISTRY} -u ${GITHUB_USER} --password-stdin
                                     
-                                    # Deploy using docker-compose
+                                    # Stop existing containers
                                     docker-compose down || true
+                                    
+                                    # Pull latest image
+                                    docker-compose pull
+                                    
+                                    # Start new containers
                                     docker-compose up -d
                                     
+                                    # Clean up old images (optional)
+                                    docker image prune -f
+                                    
                                     # Logout from registry
-                                    docker logout ghcr.io
+                                    docker logout ${REGISTRY}
 ENDSSH
                             """
                         }
                     }
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Clean up local images to save space
+                sh """
+                    docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true
+                    docker rmi ${IMAGE_NAME}:latest || true
+                """
+            }
+        }
+        success {
+            echo "Pipeline completed successfully! Deployed image: ${IMAGE_NAME}:${IMAGE_TAG}"
+        }
+        failure {
+            echo "Pipeline failed!"
         }
     }
 }

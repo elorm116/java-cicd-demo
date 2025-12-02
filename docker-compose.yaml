@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   my-app:
-    image: ghcr.io/elorm116/my-app:v2
+    image: ghcr.io/elorm116/my-app:latest
     ports:
       - "3000:80"  # Changed to match port 3000 from Jenkinsfile
   postgresql:

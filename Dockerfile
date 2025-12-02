@@ -1,4 +1,5 @@
-FROM eclipse-temurin:17-jre
-WORKDIR /app
-COPY target/java-cicd-demo-*-jar-with-dependencies.jar app.jar
-CMD ["java","-jar","/app/app.jar"]
+FROM ghcr.io/elorm116/my-app:v2
+
+# Add new layers or modifications
+RUN apk add --no-cache curl
+COPY new-config.conf /etc/
