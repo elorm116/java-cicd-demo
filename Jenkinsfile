@@ -6,6 +6,8 @@ pipeline {
     environment {
         IMAGE_TAG = "${BUILD_NUMBER}"
         IMAGE_NAME = "ghcr.io/elorm116/my-app"
+        IMAGE_REPO = "ghcr.io/elorm116/my-app"
+        APP_NAME = "my-app"
         REGISTRY = "ghcr.io"
         GITHUB_USER = "elorm116"
     }
@@ -45,8 +47,18 @@ pipeline {
             steps {
                 script {
                     echo 'deploying image...'
-                    sh 'envsubst < kubernetes/deployment.yaml | kubectl apply -f -'
-                    sh 'envsubst < kubernetes/service.yaml | kubectl apply -f -'
+                    withCredentials([string(credentialsId: 'github-integration', variable: 'GITHUB_TOKEN')]) {
+                        sh """
+                            kubectl create secret docker-registry my-registry-key \\
+                                --docker-server=${REGISTRY} \\
+                                --docker-username=${GITHUB_USER} \\
+                                --docker-password=\$GITHUB_TOKEN \\
+                                --dry-run=client -o yaml | kubectl apply -f -
+                            
+                            envsubst < kubernetes/deployment.yaml | kubectl apply -f -
+                            envsubst < kubernetes/service.yaml | kubectl apply -f -
+                        """
+                    }
                 }
             }
         }

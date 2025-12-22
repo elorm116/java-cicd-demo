@@ -18,7 +18,8 @@ spec:
         - name: my-registry-key
       containers:
         - name: $APP_NAME
-          image: $IMAGE_REPO:$IMAGE_NAME
+          image: $IMAGE_REPO:$IMAGE_TAG
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+
