@@ -37,16 +37,19 @@ pipeline {
                         string(credentialsId: 'aws_secret', variable: 'AWS_SECRET_ACCESS_KEY')
                     ]) {
                         sh """
+                            # Check if AWS CLI is available, install if not
+                            if ! command -v aws &> /dev/null; then
+                                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                                unzip -q awscliv2.zip
+                                ./aws/install
+                            fi
+                            
                             # Login to ECR
                             aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
                             
-                            # Build Docker images
+                            # Build and push images
                             docker build --platform linux/amd64 -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                            docker build --platform linux/amd64 -t ${IMAGE_NAME}:latest .
-                            
-                            # Push to ECR
                             docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                            docker push ${IMAGE_NAME}:latest
                             
                             # Logout
                             docker logout ${REGISTRY}
@@ -57,10 +60,6 @@ pipeline {
         }
         
         stage('deploy') {
-            environment {
-               AWS_ACCESS_KEY_ID = credentials('aws_access_id')
-               AWS_SECRET_ACCESS_KEY = credentials('aws_secret')
-            }
             steps {
                 script {
                     echo 'deploying image...'
@@ -69,7 +68,7 @@ pipeline {
                         string(credentialsId: 'aws_secret', variable: 'AWS_SECRET_ACCESS_KEY')
                     ]) {
                         sh """
-                            # Get ECR token and create registry secret
+                            # Create registry secret for ECR
                             ECR_TOKEN=\$(aws ecr get-login-password --region ${AWS_REGION})
                             
                             kubectl create secret docker-registry my-registry-key \\
@@ -81,9 +80,6 @@ pipeline {
                             # Deploy to Kubernetes
                             envsubst < kubernetes/deployment.yaml | kubectl apply -f -
                             envsubst < kubernetes/service.yaml | kubectl apply -f -
-                            
-                            # Wait for rollout to complete
-                            kubectl rollout status deployment/\${APP_NAME} --timeout=300s
                         """
                     }
                 }
