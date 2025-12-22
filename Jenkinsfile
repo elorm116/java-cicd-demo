@@ -2,6 +2,9 @@
 
 pipeline {
     agent any
+    tools {
+        maven 'maven-3.9' 
+    }
     
     environment {
         IMAGE_TAG = "${BUILD_NUMBER}"
