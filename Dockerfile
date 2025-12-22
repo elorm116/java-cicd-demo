@@ -10,8 +10,8 @@ RUN mvn dependency:go-offline -q
 COPY src ./src
 RUN mvn clean package -DskipTests -q
 
-# Runtime stage
-FROM openjdk:17-jre-alpine
+# Runtime stage - Fixed image name
+FROM eclipse-temurin:17-jre-alpine
 WORKDIR /usr/app
 
 # Copy the fat JAR from build stage
