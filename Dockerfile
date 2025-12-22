@@ -1,5 +1,8 @@
-FROM ghcr.io/elorm116/my-app:v2
+FROM openjdk:8-jre-alpine
 
-# Add new layers or modifications
-#RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-#COPY new-config.conf /etc/
+EXPOSE 8080
+
+COPY ./target/java-maven-app-*.jar /usr/app/
+WORKDIR /usr/app
+
+CMD java -jar java-maven-app-*.jar
