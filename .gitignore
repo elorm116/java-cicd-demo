@@ -16,3 +16,21 @@ release.properties
 *.tmp
 *.swp
 *~
+# Built application files
+*.jar
+*.war
+*.ear
+# Docker files
+docker-compose.override.yaml
+docker-compose.dev.yaml
+.env
+# Terraform files
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+crash.log
+override.tfvars
+override.tfvars.json
+*_override.tfvars
+*_override.tfvars.json
