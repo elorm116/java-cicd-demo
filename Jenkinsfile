@@ -82,7 +82,7 @@ pipeline {
             steps {
                 script {
                     echo 'waiting for infra to be ready...'
-                    sleep 90
+                    sleep 120
                     echo 'deploying image to EC2...'
                     
                     // Get EC2 public IP from Terraform
@@ -97,13 +97,20 @@ pipeline {
                         // Copy docker-compose file to EC2
                         sh "scp -o StrictHostKeyChecking=no docker-compose.yaml ec2-user@${ec2Ip}:/home/ec2-user/"
                         
-                        // SSH and deploy
+                        // SSH and deploy using double quotes for variable expansion
                         sh """
-                            ssh -o StrictHostKeyChecking=no ec2-user@${ec2Ip} '
-                                # Login to ECR
+                            ssh -o StrictHostKeyChecking=no ec2-user@${ec2Ip} "
+                                # Wait for instance metadata service
+                                echo 'Waiting for IAM credentials...'
+                                sleep 10
+                                
+                                # Verify IAM role is attached
+                                curl -s http://169.254.169.254/latest/meta-data/iam/security-credentials/ || echo 'No IAM role found'
+                                
+                                # Login to ECR using instance profile
                                 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
                                 
-                                # Set image variables for docker-compose
+                                # Set image variables and run docker-compose
                                 export IMAGE_NAME=${IMAGE_NAME}
                                 export IMAGE_TAG=${IMAGE_TAG}
                                 
@@ -115,7 +122,7 @@ pipeline {
                                 
                                 # Verify containers are running
                                 docker-compose ps
-                            '
+                            "
                         """
                     }
                 }
