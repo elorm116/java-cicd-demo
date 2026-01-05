@@ -1,9 +1,9 @@
 version: '3.8'
 services:
   my-app:
-    image: ghcr.io/elorm116/my-app:latest
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
     ports:
-      - "3000:80"  # Changed to match port 3000 from Jenkinsfile
+      - "8080:8080"
   postgresql:
     image: postgres:13
     environment:

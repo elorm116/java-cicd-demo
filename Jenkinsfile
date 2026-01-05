@@ -9,7 +9,6 @@ pipeline {
     environment {
         IMAGE_TAG = "${BUILD_NUMBER}"
         IMAGE_NAME = "867344472959.dkr.ecr.us-east-1.amazonaws.com/java-cicd-demo"
-        IMAGE_REPO = "867344472959.dkr.ecr.us-east-1.amazonaws.com/java-cicd-demo"
         APP_NAME = "my-app"
         REGISTRY = "867344472959.dkr.ecr.us-east-1.amazonaws.com"
         AWS_REGION = "us-east-1"
@@ -57,32 +56,66 @@ pipeline {
             }
         }
         
-        stage('deploy') {
+        stage('provision infra') {
+            environment {
+                TF_VAR_env_prefix = 'test'
+                AWS_ACCESS_KEY_ID = credentials('aws_access_id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws_secret')
+            }
             steps {
                 script {
-                    echo 'deploying image...'
-                    withCredentials([
-                        string(credentialsId: 'aws_access_id', variable: 'AWS_ACCESS_KEY_ID'),
-                        string(credentialsId: 'aws_secret', variable: 'AWS_SECRET_ACCESS_KEY')
-                    ]) {
+                    echo 'provisioning infrastructure...'
+                    sh """
+                        cd terraform
+                        terraform init
+                        terraform apply -auto-approve
+                    """
+                }
+            }
+        }
+
+        stage('deploy') {
+            environment {
+                AWS_ACCESS_KEY_ID = credentials('aws_access_id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws_secret')
+            }
+            steps {
+                script {
+                    echo 'waiting for infra to be ready...'
+                    sleep 90
+                    echo 'deploying image to EC2...'
+                    
+                    // Get EC2 public IP from Terraform
+                    def ec2Ip = sh(
+                        script: 'cd terraform && terraform output -raw aws_instance_public_ip',
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "Deploying to EC2 at: ${ec2Ip}"
+                    
+                    sshagent(['ec2-server-key']) {
+                        // Copy docker-compose file to EC2
+                        sh "scp -o StrictHostKeyChecking=no docker-compose.yaml ec2-user@${ec2Ip}:/home/ec2-user/"
+                        
+                        // SSH and deploy
                         sh """
-                            # Get ECR token using AWS CLI Docker container
-                            ECR_TOKEN=\$(docker run --rm \\
-                                -e AWS_ACCESS_KEY_ID=\$AWS_ACCESS_KEY_ID \\
-                                -e AWS_SECRET_ACCESS_KEY=\$AWS_SECRET_ACCESS_KEY \\
-                                -e AWS_DEFAULT_REGION=${AWS_REGION} \\
-                                amazon/aws-cli:latest \\
-                                ecr get-login-password --region ${AWS_REGION})
-                            
-                            kubectl create secret docker-registry my-registry-key \\
-                                --docker-server=${REGISTRY} \\
-                                --docker-username=AWS \\
-                                --docker-password=\$ECR_TOKEN \\
-                                --dry-run=client -o yaml | kubectl apply -f -
-                            
-                            # Deploy to Kubernetes
-                            envsubst < kubernetes/deployment.yaml | kubectl apply -f -
-                            envsubst < kubernetes/service.yaml | kubectl apply -f -
+                            ssh -o StrictHostKeyChecking=no ec2-user@${ec2Ip} '
+                                # Login to ECR
+                                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
+                                
+                                # Set image variables for docker-compose
+                                export IMAGE_NAME=${IMAGE_NAME}
+                                export IMAGE_TAG=${IMAGE_TAG}
+                                
+                                # Stop existing containers
+                                docker-compose down || true
+                                
+                                # Pull and run with docker-compose
+                                docker-compose up -d
+                                
+                                # Verify containers are running
+                                docker-compose ps
+                            '
                         """
                     }
                 }
