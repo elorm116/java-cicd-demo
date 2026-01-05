@@ -68,7 +68,6 @@ pipeline {
                     sh """
                         cd terraform
                         terraform init
-                        terraform destroy -auto-approve || true
                         terraform apply -auto-approve
                     """
                 }
