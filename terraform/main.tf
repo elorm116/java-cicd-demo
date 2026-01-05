@@ -1,3 +1,12 @@
+terraform {
+  required_version = ">= 1.0.0"
+  backend "s3" {
+    bucket = "myapp-terraform-state-bucket"
+    key    = "myapp/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
 # Configure the AWS Provider
 provider "aws" {
   region = "us-east-1"
