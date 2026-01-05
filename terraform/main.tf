@@ -33,6 +33,7 @@ resource "aws_subnet" "myapp-subnet" {
   }
 }*/
 
+
 resource "aws_internet_gateway" "myapp-igw" {
   vpc_id = aws_vpc.myapp-vpc.id
 
@@ -89,6 +90,60 @@ resource "aws_default_security_group" "default-sg" {
   }
 }
 
+# IAM Role for EC2 to access ECR
+resource "aws_iam_role" "ec2_ecr_role" {
+  name = "${var.env_prefix}-ec2-ecr-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.env_prefix}-ec2-ecr-role"
+  }
+}
+
+# IAM Policy for ECR access
+resource "aws_iam_role_policy" "ec2_ecr_policy" {
+  name = "${var.env_prefix}-ec2-ecr-policy"
+  role = aws_iam_role.ec2_ecr_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# IAM Instance Profile
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${var.env_prefix}-ec2-instance-profile"
+  role = aws_iam_role.ec2_ecr_role.name
+
+  tags = {
+    Name = "${var.env_prefix}-ec2-instance-profile"
+  }
+}
+
 data "aws_ami" "amazon_linux_image_2023" {
   most_recent = true
 
@@ -113,6 +168,7 @@ resource "aws_instance" "myapp-server" {
   availability_zone = var.availability_zone
   associate_public_ip_address = true
   key_name = "DevOps"
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
 # Commands to run at boot time
   user_data = file("entry-script.sh")
