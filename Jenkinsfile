@@ -13,7 +13,7 @@ pipeline {
                         
                         // 3. Getting the EC2 key from Jenkins vault and copying it over to the ansible server on Linode
                         withCredentials([sshUserPrivateKey(credentialsId: 'ec2-server-key', keyFileVariable: 'SSH_KEY')]) {
-                            sh "scp -o StrictHostKeyChecking=no ${SSH_KEY} root@172.235.5.161:/root/mydevops.pem"
+                            sh 'scp -o StrictHostKeyChecking=no $SSH_KEY root@172.235.5.161:/root/mydevops.pem'
                             
                             // IMPORTANT: Set correct permissions on the key once it's on the Linode
                             sh "ssh root@172.235.5.161 'chmod 400 /root/mydevops.pem'"
