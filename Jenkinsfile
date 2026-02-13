@@ -27,7 +27,7 @@ pipeline {
             steps {
                 echo 'Calling Ansible Playbook...'
                 sshagent(['ansible-server-key']) {
-                    sh "ssh root@172.232.96.211 'ansible-playbook /root/playbook.yml'"
+                    sh "ssh root@172.232.96.211 'ansible-playbook /root/my-playbook.yml'"
                 }
             }
         }
