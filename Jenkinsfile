@@ -1,42 +1,46 @@
 pipeline {
     agent any
+    environment {
+        ANSIBLE_SERVER = '172.232.96.211'
+        REMOTE_PATH = '/root/ansible_deploy' // Specific directory
+    }
     
     stages {
-        stage('Copy files to ansible server') {
+        stage('Setup Remote Environment') {
             steps {
-                script {
-                    // 1. Provide the key to access the Linode
-                    sshagent(['ansible-server-key']) {
-                        
-                        // 2. Copying the general ansible project files
-                        sh 'scp -o StrictHostKeyChecking=no ansible/* root@172.232.96.211:/root'
-                        
-                        // 3. Getting the EC2 key from Jenkins vault and copying it over to the ansible server on Linode
-                        withCredentials([sshUserPrivateKey(credentialsId: 'ec2-server-key', keyFileVariable: 'SSH_KEY')]) {
-                            sh 'scp -o StrictHostKeyChecking=no $SSH_KEY root@172.232.96.211:/root/mydevops.pem'
-                            
-                            // IMPORTANT: Set correct permissions on the key once it's on the Linode
-                            sh "ssh root@172.232.96.211 'chmod 400 /root/mydevops.pem'"
-                        }
+                sshagent(['ansible-server-key']) {
+                    // Create the directory if it doesn't exist
+                    sh "ssh root@${ANSIBLE_SERVER} 'mkdir -p ${REMOTE_PATH}'"
+                    
+                    // Copy playbooks
+                    sh "scp -r ansible/* root@${ANSIBLE_SERVER}:${REMOTE_PATH}"
+                    
+                    // Handle the EC2 key
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-server-key', keyFileVariable: 'SSH_KEY')]) {
+                        sh "scp $SSH_KEY root@${ANSIBLE_SERVER}:${REMOTE_PATH}/mydevops.pem"
+                        sh "ssh root@${ANSIBLE_SERVER} 'chmod 400 ${REMOTE_PATH}/mydevops.pem'"
                     }
                 }
             }
         }
         
-        stage('Calling Ansible Playbook') {
+        stage('Execute Playbook') {
             steps {
-                echo 'Calling Ansible Playbook...'
                 sshagent(['ansible-server-key']) {
-                    sh 'ssh -o StrictHostKeyChecking=no root@172.232.96.211 "ansible-playbook /root/my-playbook.yaml"'
-                }
-                
+                    // Run the playbook from the specific directory
+                    sh """
+                        ssh root@${ANSIBLE_SERVER} "cd ${REMOTE_PATH} && \
+                        ansible-playbook my-playbook.yaml"
+                    """
                 }
             }
-        
-        stage('Deploy') {
-            steps {
-                echo 'Deploying...'
-                // Add your deploy steps here
+        }
+    }
+    post {
+        always {
+            //Cleanup the sensitive key from the remote server after the run
+            sshagent(['ansible-server-key']) {
+                sh "ssh root@${ANSIBLE_SERVER} 'rm -f ${REMOTE_PATH}/mydevops.pem'"
             }
         }
     }
