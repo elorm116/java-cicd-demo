@@ -45,7 +45,8 @@ pipeline {
             steps {
                 sshagent(['ansible-server-key']) {
                     echo "Executing Ansible playbook"
-                    sh 'ssh root@${ANSIBLE_SERVER} "cd ${REMOTE_PATH} && ansible-playbook my-playbook.yaml"'
+                    sh 'ssh root@${ANSIBLE_SERVER} "cd ${REMOTE_PATH} && ansible-playbook -i inventory_aws_ec2.yaml my-playbook.yaml"'
+                }  // <-- ADDED: Close sshagent block
             }
         }
     }
@@ -64,5 +65,4 @@ pipeline {
             echo "Pipeline failed. Check logs for details."
         }
     }
-}
-}
+}  
