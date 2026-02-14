@@ -28,7 +28,7 @@ fi
 
 # Upgrade pip itself first
 echo "Ensuring pip is up to date..."
-pip3 install --upgrade pip --break-system-packages 2>/dev/null || pip3 install --upgrade pip
+pip3 install --upgrade pip --break-system-packages 2>/dev/null || true
 
 # Define Python dependencies
 PYTHON_DEPS="awscli boto3 botocore"
