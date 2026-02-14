@@ -37,4 +37,25 @@
     #     executable: pip3
     #   tags: ['packages']
 
-   
+    - name: Install Docker Compose v2 plugin
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-linux-{{ ansible_facts['architecture'] }}"
+        dest: /usr/libexec/docker/cli-plugins/docker-compose
+        mode: '0755'
+      tags: ['packages']
+
+    - name: Verify docker-compose installation
+      command: docker compose version
+      register: docker_compose_check
+      changed_when: false
+
+    - name: Display docker-compose version
+      debug:
+        msg: "{{ docker_compose_check.stdout }}"
+
+    - name: Make sure Docker service is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+      tags: ['docker']
