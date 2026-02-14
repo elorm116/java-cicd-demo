@@ -27,10 +27,11 @@ pipeline {
             steps {
                 echo 'Calling Ansible Playbook...'
                 sshagent(['ansible-server-key']) {
-                    sh "ssh root@172.232.96.211 'ansible-playbook /root/my-playbook.yaml'"
+                    sh 'ssh -o StrictHostKeyChecking=no root@172.232.96.211 "ansible-playbook /root/my-playbook.yaml"'
+                }
+                
                 }
             }
-        }
         
         stage('Deploy') {
             steps {
