@@ -45,8 +45,7 @@ pipeline {
             steps {
                 sshagent(['ansible-server-key']) {
                     echo "Executing Ansible playbook"
-                    sh 'ssh root@${ANSIBLE_SERVER} "cd ${REMOTE_PATH} && ansible-playbook -i inventory_aws_ec2.yaml playbook.yaml"'
-                }
+                    sh 'ssh root@${ANSIBLE_SERVER} "cd ${REMOTE_PATH} && ansible-playbook my-playbook.yaml"'
             }
         }
     }
