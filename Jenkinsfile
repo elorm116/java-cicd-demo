@@ -10,15 +10,17 @@ pipeline {
             steps {
                 sshagent(['ansible-server-key']) {
                     // Create the directory if it doesn't exist
-                    sh "ssh root@${ANSIBLE_SERVER} 'mkdir -p ${REMOTE_PATH}'"
+                    sh 'ssh root@${ANSIBLE_SERVER} "mkdir -p ${REMOTE_PATH}"'
                     
                     // Copy playbooks
-                    sh "scp -r ansible/* root@${ANSIBLE_SERVER}:${REMOTE_PATH}"
+                    sh 'scp -r ansible/* root@${ANSIBLE_SERVER}:${REMOTE_PATH}'
                     
                     // Handle the EC2 key
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-server-key', keyFileVariable: 'SSH_KEY')]) {
-                        sh "scp $SSH_KEY root@${ANSIBLE_SERVER}:${REMOTE_PATH}/mydevops.pem"
-                        sh "ssh root@${ANSIBLE_SERVER} 'chmod 400 ${REMOTE_PATH}/mydevops.pem'"
+                        sh '''
+                        scp $SSH_KEY root@${ANSIBLE_SERVER}:${REMOTE_PATH}/mydevops.pem
+                        ssh root@${ANSIBLE_SERVER} "chmod 400 ${REMOTE_PATH}/mydevops.pem"
+                        '''
                     }
                 }
             }
@@ -28,10 +30,10 @@ pipeline {
             steps {
                 sshagent(['ansible-server-key']) {
                     // Run the playbook from the specific directory
-                    sh """
+                    sh '''
                         ssh root@${ANSIBLE_SERVER} "cd ${REMOTE_PATH} && \
                         ansible-playbook my-playbook.yaml"
-                    """
+                    '''
                 }
             }
         }
@@ -40,7 +42,7 @@ pipeline {
         always {
             //Cleanup the sensitive key from the remote server after the run
             sshagent(['ansible-server-key']) {
-                sh "ssh root@${ANSIBLE_SERVER} 'rm -f ${REMOTE_PATH}/mydevops.pem'"
+                sh 'ssh root@${ANSIBLE_SERVER} "rm -f ${REMOTE_PATH}/mydevops.pem"'
             }
         }
     }
